@@ -1,6 +1,7 @@
 # Local runtime state
 /settings.json
 /settings.local.json
+/history.json
 /logs/
 *.log
 

@@ -15,6 +15,7 @@ public partial class MainWindow : Window
     private readonly AppPaths _paths;
     private readonly SimpleLogger _logger;
     private readonly QuotaReader _quotaReader;
+    private readonly QuotaHistory _history;
     private readonly DispatcherTimer _tickTimer = new();
     private readonly DispatcherTimer _topmostTimer = new();
     private readonly DispatcherTimer _placementTimer = new();
@@ -37,6 +38,7 @@ public partial class MainWindow : Window
     private bool _menuVisible;
     private bool _mouseButtonWasDown;
     private bool _isExiting;
+    private bool _expanded;
 
     public MainWindow(AppPaths paths, CliOptions options, AppSettings settings, SimpleLogger logger)
     {
@@ -44,6 +46,7 @@ public partial class MainWindow : Window
         _settings = settings;
         _logger = logger;
         _quotaReader = new QuotaReader(paths.ResolveCodexHome(options.CodexHome), options.CodexExe, logger);
+        _history = QuotaHistory.Load(paths.HistoryPath, _logger);
 
         InitializeComponent();
         Width = _settings.WindowWidth;
@@ -58,6 +61,7 @@ public partial class MainWindow : Window
         AddSeparator(0);
         AddSeparator(1);
 
+        CurvePanel.SetSamples(_history.Samples);
         BuildMenu();
         SetupTray();
         ConfigureTimers();
@@ -251,6 +255,37 @@ public partial class MainWindow : Window
         _menu.Show(Forms.Control.MousePosition);
     }
 
+    private void OnMouseLeftButtonUp(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (_menuVisible)
+        {
+            return;
+        }
+
+        ToggleExpanded();
+    }
+
+    private void ToggleExpanded()
+    {
+        _expanded = !_expanded;
+        if (_expanded)
+        {
+            CurveRowDefinition.Height = new GridLength(Constants.CurvePanelHeight);
+            CurvePanelHost.Visibility = Visibility.Visible;
+            Height = ActualHeight + Constants.CurvePanelHeight;
+        }
+        else
+        {
+            CurveRowDefinition.Height = new GridLength(0);
+            CurvePanelHost.Visibility = Visibility.Collapsed;
+            Height = Constants.DefaultHeight;
+        }
+
+        CurvePanel.InvalidateVisual();
+        SnapToTaskbar();
+        ForceTopmost();
+    }
+
     private void ResetMouseClickState()
     {
         ReadMouseState(out _, out _mouseButtonWasDown);
@@ -367,6 +402,12 @@ public partial class MainWindow : Window
             _lastQuota = value;
             _quotaLastError = null;
             _quotaLastSuccessAt = value.UpdatedAt ?? DateTimeOffset.Now;
+            if (value.Weekly?.RemainingPercent is not null || value.FiveHour?.RemainingPercent is not null)
+            {
+                _history.AddSample(new TrendSample(_quotaLastSuccessAt.Value, value.Weekly?.RemainingPercent, value.FiveHour?.RemainingPercent));
+                _history.Save(_paths.HistoryPath, _logger);
+                CurvePanel.SetSamples(_history.Samples);
+            }
         }
 
         if (_quotaPendingRefresh)
@@ -501,7 +542,7 @@ public partial class MainWindow : Window
 
     private void SnapToTaskbar()
     {
-        var placement = ResolveTaskbarPlacement(_settings.WindowWidth);
+        var placement = ResolveTaskbarPlacement(_settings.WindowWidth, ExpandedExtraHeight());
         if (_hwnd == IntPtr.Zero)
         {
             Left = placement.X;
@@ -519,7 +560,17 @@ public partial class MainWindow : Window
         NativeMethods.SetTopmostPosition(_hwnd, placement.X, placement.Y, placement.Width, placement.Height);
     }
 
-    public static TaskbarPlacement ResolveTaskbarPlacement(int preferredWidth)
+    private int ExpandedExtraHeight()
+    {
+        if (!_expanded)
+        {
+            return 0;
+        }
+
+        return (int)Math.Round(Constants.CurvePanelHeight * VisualTreeHelper.GetDpi(this).PixelsPerDip);
+    }
+
+    public static TaskbarPlacement ResolveTaskbarPlacement(int preferredWidth, int extraHeight = 0)
     {
         var bounds = Forms.Screen.PrimaryScreen?.Bounds ?? new System.Drawing.Rectangle(
             0,
@@ -532,11 +583,11 @@ public partial class MainWindow : Window
                 edge,
                 rect,
                 preferredWidth,
-                Constants.DefaultHeight,
+                extraHeight,
                 bounds.Width,
                 bounds.Height);
         }
 
-        return TaskbarPlacementCalculator.Fallback(preferredWidth, Constants.DefaultHeight, bounds.Width, bounds.Height);
+        return TaskbarPlacementCalculator.Fallback(preferredWidth, Constants.DefaultHeight + extraHeight, bounds.Width, bounds.Height);
     }
 }

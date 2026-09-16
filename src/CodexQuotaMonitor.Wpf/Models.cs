@@ -18,3 +18,5 @@ public sealed record QuotaSnapshot(
     string? Error = null);
 
 public sealed record TaskbarPlacement(int X, int Y, int Width, int Height);
+
+public sealed record TrendSample(DateTimeOffset At, double? WeeklyRemaining, double? FiveHourRemaining);

@@ -11,24 +11,23 @@ public static class TaskbarPlacementCalculator
         uint edge,
         NativeMethods.RECT taskbar,
         int preferredWidth,
-        int fallbackHeight,
+        int extraHeight,
         int screenWidth,
         int screenHeight)
     {
         if (edge is EdgeTop or EdgeBottom && taskbar.Width > 0 && taskbar.Height > 0)
         {
             var width = Math.Min(Math.Max(1, preferredWidth), taskbar.Width);
-            return Clamp(new TaskbarPlacement(taskbar.Left, taskbar.Top, width, taskbar.Height), screenWidth, screenHeight);
+            var height = taskbar.Height + extraHeight;
+            var y = edge == EdgeBottom
+                ? taskbar.Top - extraHeight
+                : extraHeight > 0 ? taskbar.Bottom : taskbar.Top;
+            return Clamp(new TaskbarPlacement(taskbar.Left, y, width, height), screenWidth, screenHeight);
         }
 
         // A vertical taskbar has no meaningful horizontal "taskbar height". Keep the
         // compact overlay at the lower-left of the primary screen in that layout.
-        if (edge is EdgeLeft or EdgeRight)
-        {
-            return Fallback(preferredWidth, fallbackHeight, screenWidth, screenHeight);
-        }
-
-        return Fallback(preferredWidth, fallbackHeight, screenWidth, screenHeight);
+        return Fallback(preferredWidth, Constants.DefaultHeight + extraHeight, screenWidth, screenHeight);
     }
 
     public static TaskbarPlacement Fallback(int preferredWidth, int height, int screenWidth, int screenHeight)

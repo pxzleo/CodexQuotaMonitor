@@ -8,6 +8,7 @@ public static class Constants
     public const int DefaultQuotaIntervalSeconds = 180;
     public const int DefaultWidth = 260;
     public const int DefaultHeight = 48;
+    public const int CurvePanelHeight = 120;
     public const double DefaultRedThreshold = 15.0;
     public const double DefaultAmberThreshold = 30.0;
 }

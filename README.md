@@ -4,7 +4,7 @@
   <p><strong>C# WPF 原生版</strong> · Windows 桌面版 Codex 的紧凑任务栏额度浮窗</p>
 </div>
 
-这是一个面向 Windows 桌面版 Codex 的轻量常驻工具。它固定覆盖在主任务栏左侧，以与任务栏相同的高度显示短周期额度、一周额度和本地刷新状态，不额外占用桌面工作区。
+这是一个面向 Windows 桌面版 Codex 的轻量常驻工具。它固定覆盖在主任务栏左侧，以与任务栏相同的高度显示短周期额度、一周额度和本地刷新状态，不额外占用桌面工作区。点击浮窗可向上展开一个最近 24 小时的剩余用量曲线区，再次点击收起。
 
 本项目不是 Codex CLI 的通用封装器或替代入口。程序会调用 Windows 桌面版 Codex 随附的本机 `codex.exe app-server`，用户侧用途仍是观察桌面版 Codex 的额度状态。
 
@@ -13,15 +13,17 @@
 ## 界面与功能
 
 - 默认宽度约 260px，高度直接采用 Windows 主任务栏的实际高度。
-- 固定在任务栏左侧并保持置顶；任务栏位置或尺寸变化后会自动重新贴靠。
+- 点击浮窗会向上展开一个固定高度的曲线区，显示最近 24 小时剩余额度走势，再次点击收起；展开/收起只改变窗口整体高度，底部三个原有区域的位置与大小保持不变。
+- 固定在任务栏左侧并保持置顶；任务栏位置或尺寸变化后会自动重新贴靠（展开状态下同样会随扩展高度重新贴靠）。
 - 半透明磨砂背景、矢量圆环和 DPI 自适应文字；窗口不出现在任务栏应用列表。
 - 托盘图标可用于刷新和退出；单实例运行，不会创建重复窗口或托盘图标。
 - 刷新失败时保留最后一次有效读数，并通过 `SYNC`、`WAIT`、`OLD`、`ERR` 或 `STALE` 标记状态。
 
 ![原生版紧凑任务栏浮窗](assets/gui-overview.png)
 
-三个区域的含义：
+各区域的含义：
 
+- **24H**：点击浮窗展开后出现在顶部的最近 24 小时剩余额度曲线。蓝色线为一周额度（WK），灰色线为 5 小时额度（5H）；采样来自周期性额度刷新（间隔见 Quota interval），持久化在 `history.json`，重启后仍显示最近 24 小时；有效采样不足时显示 `collecting…`。
 - **5H**：约 5 小时短周期额度的剩余百分比及重置倒计时。如果服务端当前未提供该窗口，显示 `--` 和 `inactive`，不会拿其他窗口的数据代替。
 - **WK**：一周额度窗口的剩余百分比及重置倒计时。
 - **REF**：上次成功刷新时间 / 当前本地时间。两组时间使用不同颜色，状态点表示当前读取状态。
@@ -74,6 +76,7 @@
 
 ~~~text
 %LOCALAPPDATA%\CodexQuotaMonitor\settings.json
+%LOCALAPPDATA%\CodexQuotaMonitor\history.json
 %LOCALAPPDATA%\CodexQuotaMonitor\logs\codex_quota_monitor.log
 ~~~
 
@@ -148,6 +151,7 @@ dotnet run --project .\tests\CodexQuotaMonitor.Tests\CodexQuotaMonitor.Tests.csp
 `.gitignore` 已排除本地设置、日志和构建产物。公开提交前仍应确认没有包含：
 
 - `settings.json`
+- `history.json`
 - `logs/`
 - `publish/`
 - `src/**/bin/`、`src/**/obj/`

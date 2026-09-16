@@ -8,6 +8,7 @@ var tests = new (string Name, Action Body)[]
     ("settings defaults, JSON load, CLI override, corrupt fallback", TestSettings),
     ("formatting helpers", TestFormatting),
     ("taskbar overlay placement", TestTaskbarPlacement),
+    ("quota history prune, save, load", TestQuotaHistory),
     ("argument handling", TestArguments)
 };
 
@@ -131,16 +132,54 @@ static void TestFormatting()
 static void TestTaskbarPlacement()
 {
     var bottomRect = new NativeMethods.RECT { Left = 0, Top = 1032, Right = 1920, Bottom = 1080 };
-    var bottom = TaskbarPlacementCalculator.Compute(3, bottomRect, 260, 48, 1920, 1080);
+    var bottom = TaskbarPlacementCalculator.Compute(3, bottomRect, 260, 0, 1920, 1080);
     Equal(new TaskbarPlacement(0, 1032, 260, 48), bottom, "bottom taskbar placement");
 
+    var bottomExpanded = TaskbarPlacementCalculator.Compute(3, bottomRect, 260, 120, 1920, 1080);
+    Equal(new TaskbarPlacement(0, 912, 260, 168), bottomExpanded, "expanded bottom taskbar placement");
+
     var topRect = new NativeMethods.RECT { Left = 0, Top = 0, Right = 1920, Bottom = 40 };
-    var top = TaskbarPlacementCalculator.Compute(1, topRect, 260, 48, 1920, 1080);
+    var top = TaskbarPlacementCalculator.Compute(1, topRect, 260, 0, 1920, 1080);
     Equal(new TaskbarPlacement(0, 0, 260, 40), top, "top taskbar height");
 
+    var topExpanded = TaskbarPlacementCalculator.Compute(1, topRect, 260, 120, 1920, 1080);
+    Equal(new TaskbarPlacement(0, 40, 260, 160), topExpanded, "expanded top taskbar placement");
+
     var verticalRect = new NativeMethods.RECT { Left = 0, Top = 0, Right = 48, Bottom = 1080 };
-    var vertical = TaskbarPlacementCalculator.Compute(0, verticalRect, 260, 48, 1920, 1080);
+    var vertical = TaskbarPlacementCalculator.Compute(0, verticalRect, 260, 0, 1920, 1080);
     Equal(new TaskbarPlacement(0, 1032, 260, 48), vertical, "vertical taskbar fallback");
+
+    var verticalExpanded = TaskbarPlacementCalculator.Compute(0, verticalRect, 260, 120, 1920, 1080);
+    Equal(new TaskbarPlacement(0, 912, 260, 168), verticalExpanded, "expanded vertical taskbar fallback");
+}
+
+static void TestQuotaHistory()
+{
+    var tempDir = Path.Combine(Path.GetTempPath(), "codex-quota-native-tests", Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(tempDir);
+    var path = Path.Combine(tempDir, "history.json");
+    try
+    {
+        var now = DateTimeOffset.Now;
+        var history = new QuotaHistory();
+        history.AddSample(new TrendSample(now.AddHours(-30), 90.0, null));
+        history.AddSample(new TrendSample(now.AddHours(-24), 80.0, 40.0));
+        history.AddSample(new TrendSample(now.AddMinutes(-5), 75.5, null));
+        history.Save(path);
+
+        var loaded = QuotaHistory.Load(path);
+        Equal(2, loaded.Samples.Count, "pruned old samples");
+        Equal(80.0, loaded.Samples[0].WeeklyRemaining, "weekly value round-trip");
+        Equal(40.0, loaded.Samples[0].FiveHourRemaining, "5h value round-trip");
+        Equal(null, loaded.Samples[1].FiveHourRemaining, "null 5h round-trip");
+
+        var empty = QuotaHistory.Load(Path.Combine(tempDir, "missing.json"));
+        Equal(0, empty.Samples.Count, "missing history file");
+    }
+    finally
+    {
+        Directory.Delete(tempDir, recursive: true);
+    }
 }
 
 static void TestArguments()

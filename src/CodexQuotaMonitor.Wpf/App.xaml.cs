@@ -158,12 +158,25 @@ public partial class App : System.Windows.Application
             NativeMethods.ShowWindow(hwnd, NativeMethods.SW_SHOWNOACTIVATE);
             NativeMethods.ApplyOverlayStyles(hwnd);
             NativeMethods.EnableFrostedBackdrop(hwnd);
-            var placement = CodexQuotaMonitor.Wpf.MainWindow.ResolveTaskbarPlacement(settings.WindowWidth);
+            var placement = CodexQuotaMonitor.Wpf.MainWindow.ResolveTaskbarPlacement(settings.WindowWidth, ExistingWindowExtraHeight(hwnd));
             NativeMethods.SetTopmostPosition(hwnd, placement.X, placement.Y, placement.Width, placement.Height);
             NativeMethods.SetTopmostNoActivate(hwnd);
             return true;
         }
         return false;
+    }
+
+    private static int ExistingWindowExtraHeight(IntPtr hwnd)
+    {
+        if (!NativeMethods.TryGetTaskbarRect(out var edge, out var taskbar) ||
+            !NativeMethods.GetWindowRect(hwnd, out var rect))
+        {
+            return 0;
+        }
+
+        var baseHeight = edge is 0u or 2u ? Constants.DefaultHeight : taskbar.Height;
+        var extra = rect.Height - baseHeight;
+        return extra > 0 ? extra : 0;
     }
 
 }

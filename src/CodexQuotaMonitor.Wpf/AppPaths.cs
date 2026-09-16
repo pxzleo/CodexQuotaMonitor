@@ -6,12 +6,14 @@ public sealed class AppPaths
     {
         RootDirectory = Path.GetFullPath(rootDirectory);
         SettingsPath = Path.Combine(RootDirectory, "settings.json");
+        HistoryPath = Path.Combine(RootDirectory, "history.json");
         LogDirectory = Path.Combine(RootDirectory, "logs");
         LogPath = Path.Combine(LogDirectory, "codex_quota_monitor.log");
     }
 
     public string RootDirectory { get; }
     public string SettingsPath { get; }
+    public string HistoryPath { get; }
     public string LogDirectory { get; }
     public string LogPath { get; }
 
