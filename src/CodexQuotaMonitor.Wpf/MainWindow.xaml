@@ -25,7 +25,9 @@
         MouseRightButtonUp="OnMouseRightButtonUp"
         MouseLeftButtonDown="OnMouseLeftButtonDown"
         MouseLeftButtonUp="OnMouseLeftButtonUp"
-        MouseMove="OnMouseMove">
+        MouseMove="OnMouseMove"
+        MouseEnter="OnMouseEnter"
+        MouseLeave="OnMouseLeave">
     <shell:WindowChrome.WindowChrome>
         <shell:WindowChrome CaptionHeight="0"
                             CornerRadius="8"

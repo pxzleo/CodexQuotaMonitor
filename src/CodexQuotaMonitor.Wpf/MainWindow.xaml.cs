@@ -40,7 +40,10 @@ public partial class MainWindow : Window
     private bool _mouseButtonWasDown;
     private bool _isExiting;
     private bool _expanded;
+    private bool _compact;
     private bool _dragging;
+    private readonly DispatcherTimer _compactDelayTimer = new();
+    private readonly List<FrameworkElement> _separators = new();
     private System.Windows.Point _dragStartScreen;
     private double _dragStartLeft;
     private double _dragStartTop;
@@ -106,6 +109,7 @@ public partial class MainWindow : Window
         };
         Grid.SetColumn(separator, column);
         RootGrid.Children.Add(separator);
+        _separators.Add(separator);
     }
 
     private void ConfigureTimers()
@@ -124,6 +128,16 @@ public partial class MainWindow : Window
 
         _menuDismissTimer.Interval = TimeSpan.FromMilliseconds(15);
         _menuDismissTimer.Tick += (_, _) => DismissMenuAfterOutsideClick();
+
+        _compactDelayTimer.Interval = TimeSpan.FromMilliseconds(400);
+        _compactDelayTimer.Tick += (_, _) =>
+        {
+            _compactDelayTimer.Stop();
+            if (!_expanded && !_menuVisible && !_dragging && !IsMouseOver)
+            {
+                SetCompact(true);
+            }
+        };
     }
 
     private void BuildMenu()
@@ -142,6 +156,10 @@ public partial class MainWindow : Window
             _menuDismissTimer.Stop();
             _menuVisible = false;
             ForceTopmost();
+            if (IsMouseOver)
+            {
+                SetCompact(false);
+            }
         };
         _menu.AutoClose = true;
         _menu.Items.Add("Refresh now", null, (_, _) => RefreshNow());
@@ -272,6 +290,59 @@ if (args.Button == Forms.MouseButtons.Left)
         _menu.Show(Forms.Control.MousePosition);
     }
 
+    private void OnMouseEnter(object sender, System.Windows.Input.MouseEventArgs e)
+    {
+        _compactDelayTimer.Stop();
+        SetCompact(false);
+    }
+
+    private void OnMouseLeave(object sender, System.Windows.Input.MouseEventArgs e)
+    {
+        if (_menuVisible || _expanded || _dragging)
+        {
+            return;
+        }
+
+        _compactDelayTimer.Start();
+    }
+
+    private void SetCompact(bool value)
+    {
+        if (_compact == value)
+        {
+            return;
+        }
+
+        _compact = value;
+        if (value)
+        {
+            _quota5h.Visibility = Visibility.Collapsed;
+            _refreshStatus.Visibility = Visibility.Collapsed;
+            foreach (var separator in _separators)
+            {
+                separator.Visibility = Visibility.Collapsed;
+            }
+            Grid.SetColumn(_quotaWeek, 0);
+            Grid.SetColumnSpan(_quotaWeek, 3);
+            Width = Constants.CompactWidth;
+        }
+        else
+        {
+            _quota5h.Visibility = Visibility.Visible;
+            _refreshStatus.Visibility = Visibility.Visible;
+            foreach (var separator in _separators)
+            {
+                separator.Visibility = Visibility.Visible;
+            }
+            Grid.SetColumn(_quotaWeek, 1);
+            Grid.SetColumnSpan(_quotaWeek, 1);
+            Width = _settings.WindowWidth;
+        }
+
+        SnapToPlacement();
+        ForceTopmost();
+    }
+
     private void OnMouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
         if (_menuVisible)
@@ -339,6 +410,7 @@ if (args.Button == Forms.MouseButtons.Left)
         _expanded = !_expanded;
         if (_expanded)
         {
+            SetCompact(false);
             CurveRowDefinition.Height = new GridLength(Constants.CurvePanelHeight);
             CurvePanelHost.Visibility = Visibility.Visible;
             Height = ActualHeight + Constants.CurvePanelHeight;
@@ -691,7 +763,7 @@ if (args.Button == Forms.MouseButtons.Left)
             _settings.PlacementEdge,
             _settings.PlacementOffset,
             _settings.PlacementOffset2,
-            _settings.WindowWidth,
+            (int)Math.Round(Width),
             CollapsedWindowHeight(),
             ExpandedExtraHeight());
     }

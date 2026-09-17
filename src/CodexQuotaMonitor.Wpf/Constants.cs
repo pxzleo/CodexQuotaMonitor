@@ -9,6 +9,7 @@ public static class Constants
     public const int DefaultWidth = 260;
     public const int DefaultHeight = 48;
     public const int CurvePanelHeight = 120;
+    public const int CompactWidth = 92;
     public const int DefaultTrendWindowSeconds = 24 * 60 * 60;
     public const string PlacementTaskbar = "taskbar";
     public const string PlacementLeft = "left";
