@@ -12,7 +12,7 @@ namespace CodexQuotaMonitor.Wpf;
 
 public sealed class QuotaTrendBlock : FrameworkElement
 {
-    private static readonly TimeSpan WindowSpan = TimeSpan.FromHours(24);
+    private TimeSpan _window = TimeSpan.FromHours(24);
 
     private IReadOnlyList<TrendSample> _samples = Array.Empty<TrendSample>();
 
@@ -29,6 +29,22 @@ public sealed class QuotaTrendBlock : FrameworkElement
         InvalidateVisual();
     }
 
+    public void SetWindow(TimeSpan window)
+    {
+        _window = window;
+        InvalidateVisual();
+    }
+
+    public static string WindowLabel(TimeSpan window)
+    {
+        if (window.TotalMinutes % 60 == 0)
+        {
+            return $"{(int)window.TotalHours}H";
+        }
+
+        return $"{(int)Math.Round(window.TotalMinutes)}M";
+    }
+
     protected override void OnRender(DrawingContext dc)
     {
         base.OnRender(dc);
@@ -43,7 +59,7 @@ public sealed class QuotaTrendBlock : FrameworkElement
         var fiveHourBrush = new SolidColorBrush(Formatting.ColorFromHex("#8B97A5"));
 
         var labelSize = Math.Clamp(height * 0.13, 8.0, 10.0);
-        DrawText(dc, "24H", 2, 1, labelSize, FontWeights.Bold, primary, dpi);
+        DrawText(dc, WindowLabel(_window), 2, 1, labelSize, FontWeights.Bold, primary, dpi);
         DrawLegend(dc, width, 1, labelSize, dpi, weeklyBrush, fiveHourBrush);
 
         var chartLeft = 20.0;
@@ -60,7 +76,7 @@ public sealed class QuotaTrendBlock : FrameworkElement
         DrawGrid(dc, chartLeft, chartRight, chartTop, chartBottom, dpi, muted);
 
         var now = DateTimeOffset.Now;
-        var start = now - WindowSpan;
+        var start = now - _window;
         var visible = _samples
             .Where(sample => sample.At >= start &&
                              (sample.WeeklyRemaining.HasValue || sample.FiveHourRemaining.HasValue))
@@ -81,8 +97,8 @@ public sealed class QuotaTrendBlock : FrameworkElement
         }
         else
         {
-            DrawSeries(dc, visible, sample => sample.WeeklyRemaining, weeklyBrush, weeklyFill, 1.6, chartLeft, chartRight, chartTop, chartHeight, start);
-            DrawSeries(dc, visible, sample => sample.FiveHourRemaining, fiveHourBrush, null, 1.1, chartLeft, chartRight, chartTop, chartHeight, start);
+            DrawSeries(dc, visible, sample => sample.WeeklyRemaining, weeklyBrush, weeklyFill, 1.6, chartLeft, chartRight, chartTop, chartHeight, start, _window);
+            DrawSeries(dc, visible, sample => sample.FiveHourRemaining, fiveHourBrush, null, 1.1, chartLeft, chartRight, chartTop, chartHeight, start, _window);
         }
 
         DrawAxisTimes(dc, chartLeft, chartRight, chartBottom, start, now, dpi, muted);
@@ -99,7 +115,8 @@ public sealed class QuotaTrendBlock : FrameworkElement
         double right,
         double top,
         double height,
-        DateTimeOffset start)
+        DateTimeOffset start,
+        TimeSpan window)
     {
         var pen = new Pen(strokeBrush, strokeWidth)
         {
@@ -119,7 +136,7 @@ public sealed class QuotaTrendBlock : FrameworkElement
                 continue;
             }
 
-            var x = left + Math.Clamp((sample.At - start).TotalHours / 24.0, 0.0, 1.0) * (right - left);
+            var x = left + Math.Clamp((sample.At - start).TotalMinutes / window.TotalMinutes, 0.0, 1.0) * (right - left);
             var y = top + (100.0 - Math.Clamp(value.Value, 0.0, 100.0)) / 100.0 * height;
             current.Add(new Point(x, y));
         }

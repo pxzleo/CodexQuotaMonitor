@@ -23,7 +23,9 @@
         SourceInitialized="OnSourceInitialized"
         Closing="OnClosing"
         MouseRightButtonUp="OnMouseRightButtonUp"
-        MouseLeftButtonUp="OnMouseLeftButtonUp">
+        MouseLeftButtonDown="OnMouseLeftButtonDown"
+        MouseLeftButtonUp="OnMouseLeftButtonUp"
+        MouseMove="OnMouseMove">
     <shell:WindowChrome.WindowChrome>
         <shell:WindowChrome CaptionHeight="0"
                             CornerRadius="8"

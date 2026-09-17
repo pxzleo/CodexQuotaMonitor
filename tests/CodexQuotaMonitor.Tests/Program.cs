@@ -91,6 +91,10 @@ static void TestSettings()
     {
         var defaults = SettingsStore.Load(path);
         Equal(180, defaults.QuotaInterval, "default quota interval");
+        Equal(86400, defaults.TrendWindowSeconds, "default trend window");
+        Equal(Constants.PlacementTaskbar, defaults.PlacementEdge, "default placement edge");
+        Equal(0, defaults.PlacementOffset, "default placement offset");
+        Equal(0, defaults.PlacementOffset2, "default placement offset2");
 
         File.WriteAllText(path, """
             {
@@ -98,13 +102,37 @@ static void TestSettings()
               "no_tray": true,
               "window_width": 336,
               "red_threshold": 10,
-              "amber_threshold": 25
+              "amber_threshold": 25,
+              "trend_window_seconds": 900,
+              "placement_edge": "right",
+              "placement_offset": 420,
+              "placement_offset2": 130
             }
             """);
         var loaded = SettingsStore.Load(path);
         Equal(60, loaded.QuotaInterval, "loaded quota interval");
         Equal(true, loaded.NoTray, "loaded no tray");
         Equal(260, loaded.WindowWidth, "floating-card width migration");
+        Equal(900, loaded.TrendWindowSeconds, "loaded trend window");
+        Equal(Constants.PlacementRight, loaded.PlacementEdge, "loaded placement edge");
+        Equal(420, loaded.PlacementOffset, "loaded placement offset");
+        Equal(130, loaded.PlacementOffset2, "loaded placement offset2");
+
+        File.WriteAllText(path, """
+            {
+              "placement_edge": "middle"
+            }
+            """);
+        var invalidEdge = SettingsStore.Load(path);
+        Equal(Constants.PlacementTaskbar, invalidEdge.PlacementEdge, "invalid placement edge normalized");
+
+        File.WriteAllText(path, """
+            {
+              "trend_window_seconds": 1234
+            }
+            """);
+        var invalidWindow = SettingsStore.Load(path);
+        Equal(86400, invalidWindow.TrendWindowSeconds, "invalid trend window normalized");
 
         var cli = CliOptions.Parse(["--quota-interval", "300", "--tray"]);
         var merged = SettingsStore.ApplyCliOverrides(loaded, cli);
@@ -114,6 +142,7 @@ static void TestSettings()
         File.WriteAllText(path, "{ broken json");
         var fallback = SettingsStore.Load(path);
         Equal(180, fallback.QuotaInterval, "corrupt JSON fallback");
+        Equal(86400, fallback.TrendWindowSeconds, "corrupt JSON trend fallback");
     }
     finally
     {
@@ -127,6 +156,10 @@ static void TestFormatting()
     Equal("abcdefg...", Formatting.Truncate("abcdefghijk", 10), "truncate long");
     Equal("--", Formatting.RemainingText(null), "remaining missing");
     Equal("43", Formatting.RemainingText(42.75), "remaining percent");
+    Equal("24H", QuotaTrendBlock.WindowLabel(TimeSpan.FromHours(24)), "24h window label");
+    Equal("6H", QuotaTrendBlock.WindowLabel(TimeSpan.FromHours(6)), "6h window label");
+    Equal("1H", QuotaTrendBlock.WindowLabel(TimeSpan.FromHours(1)), "1h window label");
+    Equal("15M", QuotaTrendBlock.WindowLabel(TimeSpan.FromMinutes(15)), "15min window label");
 }
 
 static void TestTaskbarPlacement()
@@ -151,6 +184,21 @@ static void TestTaskbarPlacement()
 
     var verticalExpanded = TaskbarPlacementCalculator.Compute(0, verticalRect, 260, 120, 1920, 1080);
     Equal(new TaskbarPlacement(0, 912, 260, 168), verticalExpanded, "expanded vertical taskbar fallback");
+
+    var bounds = new System.Drawing.Rectangle(0, 0, 1920, 1080);
+    Equal(new TaskbarPlacement(0, 300, 260, 48), TaskbarPlacementCalculator.EdgePlacement(Constants.PlacementLeft, 0, 300, 260, 48, bounds), "left edge placement");
+    Equal(new TaskbarPlacement(1660, 300, 260, 48), TaskbarPlacementCalculator.EdgePlacement(Constants.PlacementRight, 0, 300, 260, 48, bounds), "right edge placement");
+    Equal(new TaskbarPlacement(500, 0, 260, 48), TaskbarPlacementCalculator.EdgePlacement(Constants.PlacementTop, 500, 0, 260, 48, bounds), "top edge placement");
+    Equal(new TaskbarPlacement(500, 1032, 260, 48), TaskbarPlacementCalculator.EdgePlacement(Constants.PlacementBottom, 500, 0, 260, 48, bounds), "bottom edge placement");
+    Equal(new TaskbarPlacement(1660, 1032, 260, 48), TaskbarPlacementCalculator.EdgePlacement(Constants.PlacementRight, 0, 99999, 260, 48, bounds), "right edge offset clamp");
+    Equal(new TaskbarPlacement(700, 500, 260, 48), TaskbarPlacementCalculator.EdgePlacement(Constants.PlacementFree, 700, 500, 260, 48, bounds), "free placement");
+
+    Equal(Constants.PlacementLeft, TaskbarPlacementCalculator.ResolveSnapEdge(0, 400, 260, 448, 1920, 1080, 48), "snap left edge");
+    Equal(Constants.PlacementRight, TaskbarPlacementCalculator.ResolveSnapEdge(1660, 400, 1920, 448, 1920, 1080, 48), "snap right edge");
+    Equal(Constants.PlacementTop, TaskbarPlacementCalculator.ResolveSnapEdge(800, 10, 1060, 58, 1920, 1080, 48), "snap top edge");
+    Equal(Constants.PlacementBottom, TaskbarPlacementCalculator.ResolveSnapEdge(800, 1022, 1060, 1080, 1920, 1080, 48), "snap bottom edge");
+    Equal(Constants.PlacementFree, TaskbarPlacementCalculator.ResolveSnapEdge(800, 400, 1060, 448, 1920, 1080, 48), "center stays free");
+    Equal(Constants.PlacementFree, TaskbarPlacementCalculator.ResolveSnapEdge(49, 400, 309, 448, 1920, 1080, 48), "just outside snap distance");
 }
 
 static void TestQuotaHistory()

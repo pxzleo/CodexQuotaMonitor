@@ -14,6 +14,18 @@ public sealed class AppSettings
     [JsonPropertyName("window_width")]
     public int WindowWidth { get; set; } = Constants.DefaultWidth;
 
+    [JsonPropertyName("trend_window_seconds")]
+    public int TrendWindowSeconds { get; set; } = Constants.DefaultTrendWindowSeconds;
+
+    [JsonPropertyName("placement_edge")]
+    public string PlacementEdge { get; set; } = Constants.PlacementTaskbar;
+
+    [JsonPropertyName("placement_offset")]
+    public int PlacementOffset { get; set; }
+
+    [JsonPropertyName("placement_offset2")]
+    public int PlacementOffset2 { get; set; }
+
     [JsonPropertyName("red_threshold")]
     public double RedThreshold { get; set; } = Constants.DefaultRedThreshold;
 
@@ -25,6 +37,10 @@ public sealed class AppSettings
         QuotaInterval = QuotaInterval,
         NoTray = NoTray,
         WindowWidth = WindowWidth,
+        TrendWindowSeconds = TrendWindowSeconds,
+        PlacementEdge = PlacementEdge,
+        PlacementOffset = PlacementOffset,
+        PlacementOffset2 = PlacementOffset2,
         RedThreshold = RedThreshold,
         AmberThreshold = AmberThreshold
     };
@@ -35,6 +51,14 @@ public sealed class AppSettings
         WindowWidth = WindowWidth is < 220 or > 300
             ? Constants.DefaultWidth
             : WindowWidth;
+        TrendWindowSeconds = Constants.TrendWindowOptions.Any(option => option.Seconds == TrendWindowSeconds)
+            ? TrendWindowSeconds
+            : Constants.DefaultTrendWindowSeconds;
+        PlacementEdge = Constants.PlacementEdges.Contains(PlacementEdge)
+            ? PlacementEdge
+            : Constants.PlacementTaskbar;
+        PlacementOffset = Math.Max(0, PlacementOffset);
+        PlacementOffset2 = Math.Max(0, PlacementOffset2);
         RedThreshold = Math.Clamp(RedThreshold, 0.0, 100.0);
         AmberThreshold = Math.Clamp(AmberThreshold, RedThreshold, 100.0);
     }

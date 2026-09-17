@@ -38,6 +38,63 @@ public static class TaskbarPlacementCalculator
             screenHeight);
     }
 
+    public static TaskbarPlacement EdgePlacement(
+        string edge,
+        int offset,
+        int offset2,
+        int width,
+        int height,
+        System.Drawing.Rectangle bounds)
+    {
+        var w = Math.Max(1, width);
+        var h = Math.Max(1, height);
+        int x;
+        int y;
+        switch (edge)
+        {
+            case Constants.PlacementRight:
+                x = Math.Max(0, bounds.Width - w);
+                y = ClampOffset(offset2, 0, bounds.Height - h);
+                break;
+            case Constants.PlacementTop:
+                x = ClampOffset(offset, 0, bounds.Width - w);
+                y = 0;
+                break;
+            case Constants.PlacementBottom:
+                x = ClampOffset(offset, 0, bounds.Width - w);
+                y = Math.Max(0, bounds.Height - h);
+                break;
+            case Constants.PlacementFree:
+                x = ClampOffset(offset, 0, bounds.Width - w);
+                y = ClampOffset(offset2, 0, bounds.Height - h);
+                break;
+            default:
+                x = 0;
+                y = ClampOffset(offset2, 0, bounds.Height - h);
+                break;
+        }
+
+        return new TaskbarPlacement(x, y, w, h);
+    }
+
+    public static string ResolveSnapEdge(int left, int top, int right, int bottom, int screenWidth, int screenHeight, int snapDistance)
+    {
+        var candidates = new (string Edge, int Distance)[]
+        {
+            (Constants.PlacementLeft, left),
+            (Constants.PlacementRight, screenWidth - right),
+            (Constants.PlacementTop, top),
+            (Constants.PlacementBottom, screenHeight - bottom)
+        };
+        var nearest = candidates.OrderBy(candidate => candidate.Distance).First();
+        return nearest.Distance > snapDistance ? Constants.PlacementFree : nearest.Edge;
+    }
+
+    private static int ClampOffset(int offset, int min, int max)
+    {
+        return max < min ? min : Math.Clamp(offset, min, max);
+    }
+
     private static TaskbarPlacement Clamp(TaskbarPlacement placement, int screenWidth, int screenHeight)
     {
         var width = Math.Clamp(placement.Width, 1, Math.Max(1, screenWidth));

@@ -116,8 +116,9 @@ public partial class App : System.Windows.Application
         Console.WriteLine($"codex_exe={(string.IsNullOrWhiteSpace(codexExe) ? "not found" : codexExe)}");
         Console.WriteLine($"quota_interval={settings.QuotaInterval}");
         Console.WriteLine($"tray={(!settings.NoTray)}");
-        var placement = CodexQuotaMonitor.Wpf.MainWindow.ResolveTaskbarPlacement(settings.WindowWidth);
+        var placement = CodexQuotaMonitor.Wpf.MainWindow.ResolvePlacement(settings.PlacementEdge, settings.PlacementOffset, settings.PlacementOffset2, settings.WindowWidth, Constants.DefaultHeight, 0);
         Console.WriteLine($"placement={placement.X},{placement.Y},{placement.Width}x{placement.Height}");
+        Console.WriteLine($"placement_edge={settings.PlacementEdge} placement_offset={settings.PlacementOffset} placement_offset2={settings.PlacementOffset2}");
         if (NativeMethods.TryGetTaskbarRect(out var edge, out var rect))
         {
             Console.WriteLine($"taskbar=edge:{edge} rect:{rect.Left},{rect.Top},{rect.Right},{rect.Bottom}");
@@ -158,25 +159,30 @@ public partial class App : System.Windows.Application
             NativeMethods.ShowWindow(hwnd, NativeMethods.SW_SHOWNOACTIVATE);
             NativeMethods.ApplyOverlayStyles(hwnd);
             NativeMethods.EnableFrostedBackdrop(hwnd);
-            var placement = CodexQuotaMonitor.Wpf.MainWindow.ResolveTaskbarPlacement(settings.WindowWidth, ExistingWindowExtraHeight(hwnd));
+            var baseHeight = Constants.DefaultHeight;
+            var extra = 0;
+            if (NativeMethods.TryGetTaskbarRect(out var edge, out var taskbar) &&
+                NativeMethods.GetWindowRect(hwnd, out var rect))
+            {
+                baseHeight = edge is 0u or 2u ? Constants.DefaultHeight : taskbar.Height;
+                extra = rect.Height - baseHeight;
+                if (extra < 0)
+                {
+                    extra = 0;
+                }
+            }
+            var placement = CodexQuotaMonitor.Wpf.MainWindow.ResolvePlacement(
+                settings.PlacementEdge,
+                settings.PlacementOffset,
+                settings.PlacementOffset2,
+                settings.WindowWidth,
+                baseHeight,
+                extra);
             NativeMethods.SetTopmostPosition(hwnd, placement.X, placement.Y, placement.Width, placement.Height);
             NativeMethods.SetTopmostNoActivate(hwnd);
             return true;
         }
         return false;
-    }
-
-    private static int ExistingWindowExtraHeight(IntPtr hwnd)
-    {
-        if (!NativeMethods.TryGetTaskbarRect(out var edge, out var taskbar) ||
-            !NativeMethods.GetWindowRect(hwnd, out var rect))
-        {
-            return 0;
-        }
-
-        var baseHeight = edge is 0u or 2u ? Constants.DefaultHeight : taskbar.Height;
-        var extra = rect.Height - baseHeight;
-        return extra > 0 ? extra : 0;
     }
 
 }
