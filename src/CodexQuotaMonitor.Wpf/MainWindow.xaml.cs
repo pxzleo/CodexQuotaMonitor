@@ -26,6 +26,7 @@ public partial class MainWindow : Window
     private readonly Forms.ContextMenuStrip _menu = new();
     private readonly List<Forms.ToolStripMenuItem> _quotaIntervalItems = new();
     private readonly List<Forms.ToolStripMenuItem> _trendWindowItems = new();
+    private Forms.ToolStripMenuItem _startupItem = null!;
     private Forms.NotifyIcon? _notifyIcon;
     private System.Drawing.Icon? _trayIcon;
     private AppSettings _settings;
@@ -165,6 +166,9 @@ public partial class MainWindow : Window
         _menu.Items.Add("Refresh now", null, (_, _) => RefreshNow());
         _menu.Items.Add("Snap to taskbar left", null, (_, _) => ResetToTaskbarPlacement());
         _menu.Items.Add(new Forms.ToolStripMenuItem(_settings.NoTray ? "Tray icon: off" : "Tray icon: on") { Enabled = false });
+        _startupItem = new Forms.ToolStripMenuItem("Run at startup") { CheckOnClick = true };
+        _startupItem.Click += (_, _) => SetStartupEnabled(_startupItem.Checked);
+        _menu.Items.Add(_startupItem);
         _menu.Items.Add(new Forms.ToolStripSeparator());
 
         var quotaMenu = new Forms.ToolStripMenuItem("Quota interval");
@@ -350,7 +354,13 @@ if (args.Button == Forms.MouseButtons.Left)
             return;
         }
 
-        _dragStartScreen = PointToScreen(e.GetPosition(this));
+        if (!NativeMethods.GetCursorPos(out var cursor))
+        {
+            return;
+        }
+
+        var dpi = VisualTreeHelper.GetDpi(this).PixelsPerDip;
+        _dragStartScreen = new System.Windows.Point(cursor.X / dpi, cursor.Y / dpi);
         _dragStartLeft = Left;
         _dragStartTop = Top;
         _dragging = false;
@@ -364,9 +374,14 @@ if (args.Button == Forms.MouseButtons.Left)
             return;
         }
 
-        var screen = PointToScreen(e.GetPosition(this));
-        var dx = screen.X - _dragStartScreen.X;
-        var dy = screen.Y - _dragStartScreen.Y;
+        if (!NativeMethods.GetCursorPos(out var cursor))
+        {
+            return;
+        }
+
+        var dpi = VisualTreeHelper.GetDpi(this).PixelsPerDip;
+        var dx = cursor.X / dpi - _dragStartScreen.X;
+        var dy = cursor.Y / dpi - _dragStartScreen.Y;
         if (!_dragging && (Math.Abs(dx) > 3 || Math.Abs(dy) > 3))
         {
             _dragging = true;
@@ -667,6 +682,19 @@ if (args.Button == Forms.MouseButtons.Left)
         UpdateMenuChecks();
     }
 
+    private void SetStartupEnabled(bool enabled)
+    {
+        if (!StartupManager.SetEnabled(enabled, _logger))
+        {
+            _startupItem.Checked = _settings.Startup;
+            return;
+        }
+
+        _settings.Startup = enabled;
+        SettingsStore.Save(_paths.SettingsPath, _settings, _logger);
+        UpdateMenuChecks();
+    }
+
     private void UpdateMenuChecks()
     {
         foreach (var item in _quotaIntervalItems)
@@ -677,6 +705,7 @@ if (args.Button == Forms.MouseButtons.Left)
         {
             item.Checked = item.Tag is int seconds && seconds == _settings.TrendWindowSeconds;
         }
+        _startupItem.Checked = _settings.Startup;
     }
 
     private void ForceTopmost()
@@ -706,17 +735,24 @@ if (args.Button == Forms.MouseButtons.Left)
         {
             Left = placement.X;
             Top = placement.Y;
+            Width = placement.Width;
+            Height = placement.Height;
             return;
         }
 
+        var dpi = VisualTreeHelper.GetDpi(this).PixelsPerDip;
+        var x = (int)Math.Round(placement.X * dpi);
+        var y = (int)Math.Round(placement.Y * dpi);
+        var w = (int)Math.Round(placement.Width * dpi);
+        var h = (int)Math.Round(placement.Height * dpi);
         if (NativeMethods.GetWindowRect(_hwnd, out var current) &&
-            current.Left == placement.X && current.Top == placement.Y &&
-            current.Width == placement.Width && current.Height == placement.Height)
+            current.Left == x && current.Top == y &&
+            current.Width == w && current.Height == h)
         {
             return;
         }
 
-        NativeMethods.SetTopmostPosition(_hwnd, placement.X, placement.Y, placement.Width, placement.Height);
+        NativeMethods.SetTopmostPosition(_hwnd, x, y, w, h);
     }
 
     private void SnapToNearestEdge()
@@ -726,19 +762,24 @@ if (args.Button == Forms.MouseButtons.Left)
             return;
         }
 
-        var bounds = ScreenBounds();
+        var dpi = VisualTreeHelper.GetDpi(this).PixelsPerDip;
+        var physical = Forms.Screen.PrimaryScreen?.Bounds ?? new System.Drawing.Rectangle(
+            0,
+            0,
+            (int)Math.Round(SystemParameters.PrimaryScreenWidth * dpi),
+            (int)Math.Round(SystemParameters.PrimaryScreenHeight * dpi));
         var edge = TaskbarPlacementCalculator.ResolveSnapEdge(
             rect.Left,
             rect.Top,
             rect.Right,
             rect.Bottom,
-            bounds.Width,
-            bounds.Height,
+            physical.Width,
+            physical.Height,
             Constants.EdgeSnapDistance);
 
         _settings.PlacementEdge = edge;
-        _settings.PlacementOffset = rect.Left;
-        _settings.PlacementOffset2 = rect.Top;
+        _settings.PlacementOffset = (int)Math.Round(rect.Left / dpi);
+        _settings.PlacementOffset2 = (int)Math.Round(rect.Top / dpi);
 
         _settings.Normalize();
         SettingsStore.Save(_paths.SettingsPath, _settings, _logger);
@@ -763,18 +804,31 @@ if (args.Button == Forms.MouseButtons.Left)
             _settings.PlacementEdge,
             _settings.PlacementOffset,
             _settings.PlacementOffset2,
-            (int)Math.Round(Width),
+            _compact ? Constants.CompactWidth : _settings.WindowWidth,
             CollapsedWindowHeight(),
-            ExpandedExtraHeight());
+            _expanded ? Constants.CurvePanelHeight : 0,
+            VisualTreeHelper.GetDpi(this).PixelsPerDip);
     }
 
-    public static TaskbarPlacement ResolvePlacement(string edge, int offset, int offset2, int width, int baseHeight, int extraHeight)
+    public static TaskbarPlacement ResolvePlacement(string edge, int offset, int offset2, int width, int baseHeight, int extraHeight, double dpiScale)
     {
-        var bounds = ScreenBounds();
+        var bounds = ScreenBoundsDip(dpiScale);
         if (edge == Constants.PlacementTaskbar)
         {
             if (NativeMethods.TryGetTaskbarRect(out var taskbarEdge, out var taskbarRect))
             {
+                if (dpiScale > 0)
+                {
+                    var dipTaskbar = new NativeMethods.RECT
+                    {
+                        Left = (int)Math.Round(taskbarRect.Left / dpiScale),
+                        Top = (int)Math.Round(taskbarRect.Top / dpiScale),
+                        Right = (int)Math.Round(taskbarRect.Right / dpiScale),
+                        Bottom = (int)Math.Round(taskbarRect.Bottom / dpiScale)
+                    };
+                    return TaskbarPlacementCalculator.Compute(taskbarEdge, dipTaskbar, width, extraHeight, bounds.Width, bounds.Height);
+                }
+
                 return TaskbarPlacementCalculator.Compute(taskbarEdge, taskbarRect, width, extraHeight, bounds.Width, bounds.Height);
             }
 
@@ -784,32 +838,32 @@ if (args.Button == Forms.MouseButtons.Left)
         return TaskbarPlacementCalculator.EdgePlacement(edge, offset, offset2, width, baseHeight + extraHeight, bounds);
     }
 
-    private static System.Drawing.Rectangle ScreenBounds()
+    public static System.Drawing.Rectangle ScreenBoundsDip(double dpiScale)
     {
-        return Forms.Screen.PrimaryScreen?.Bounds ?? new System.Drawing.Rectangle(
+        var physical = Forms.Screen.PrimaryScreen?.Bounds;
+        if (physical.HasValue && dpiScale > 0)
+        {
+            return new System.Drawing.Rectangle(
+                (int)Math.Round(physical.Value.Left / dpiScale),
+                (int)Math.Round(physical.Value.Top / dpiScale),
+                (int)Math.Round(physical.Value.Width / dpiScale),
+                (int)Math.Round(physical.Value.Height / dpiScale));
+        }
+
+        return new System.Drawing.Rectangle(
             0,
             0,
             (int)SystemParameters.PrimaryScreenWidth,
             (int)SystemParameters.PrimaryScreenHeight);
     }
 
-    private static int CollapsedWindowHeight()
+    private int CollapsedWindowHeight()
     {
         if (NativeMethods.TryGetTaskbarRect(out var edge, out var taskbar) && edge is 1u or 3u)
         {
-            return taskbar.Height;
+            return (int)Math.Round(taskbar.Height / VisualTreeHelper.GetDpi(this).PixelsPerDip);
         }
 
         return Constants.DefaultHeight;
-    }
-
-    private int ExpandedExtraHeight()
-    {
-        if (!_expanded)
-        {
-            return 0;
-        }
-
-        return (int)Math.Round(Constants.CurvePanelHeight * VisualTreeHelper.GetDpi(this).PixelsPerDip);
     }
 }

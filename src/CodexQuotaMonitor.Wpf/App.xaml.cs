@@ -116,7 +116,10 @@ public partial class App : System.Windows.Application
         Console.WriteLine($"codex_exe={(string.IsNullOrWhiteSpace(codexExe) ? "not found" : codexExe)}");
         Console.WriteLine($"quota_interval={settings.QuotaInterval}");
         Console.WriteLine($"tray={(!settings.NoTray)}");
-        var placement = CodexQuotaMonitor.Wpf.MainWindow.ResolvePlacement(settings.PlacementEdge, settings.PlacementOffset, settings.PlacementOffset2, settings.WindowWidth, Constants.DefaultHeight, 0);
+        var physicalWidth = System.Windows.Forms.Screen.PrimaryScreen?.Bounds.Width ?? 0;
+        var dipWidth = (int)SystemParameters.PrimaryScreenWidth;
+        var dpiScale = physicalWidth > 0 && dipWidth > 0 ? (double)physicalWidth / dipWidth : 1.0;
+        var placement = CodexQuotaMonitor.Wpf.MainWindow.ResolvePlacement(settings.PlacementEdge, settings.PlacementOffset, settings.PlacementOffset2, settings.WindowWidth, Constants.DefaultHeight, 0, dpiScale);
         Console.WriteLine($"placement={placement.X},{placement.Y},{placement.Width}x{placement.Height}");
         Console.WriteLine($"placement_edge={settings.PlacementEdge} placement_offset={settings.PlacementOffset} placement_offset2={settings.PlacementOffset2}");
         if (NativeMethods.TryGetTaskbarRect(out var edge, out var rect))
@@ -159,26 +162,31 @@ public partial class App : System.Windows.Application
             NativeMethods.ShowWindow(hwnd, NativeMethods.SW_SHOWNOACTIVATE);
             NativeMethods.ApplyOverlayStyles(hwnd);
             NativeMethods.EnableFrostedBackdrop(hwnd);
-            var baseHeight = Constants.DefaultHeight;
-            var extra = 0;
-            if (NativeMethods.TryGetTaskbarRect(out var edge, out var taskbar) &&
-                NativeMethods.GetWindowRect(hwnd, out var rect))
+            var dpi = NativeMethods.GetDpiForWindow(hwnd);
+            var scale = dpi > 0 ? dpi / 96.0 : 1.0;
+            var baseHeightPhysical = Constants.DefaultHeight;
+            if (NativeMethods.TryGetTaskbarRect(out var edge, out var taskbar))
             {
-                baseHeight = edge is 0u or 2u ? Constants.DefaultHeight : taskbar.Height;
-                extra = rect.Height - baseHeight;
-                if (extra < 0)
-                {
-                    extra = 0;
-                }
+                baseHeightPhysical = edge is 0u or 2u ? Constants.DefaultHeight : taskbar.Height;
+            }
+            var extraPhysical = 0;
+            if (NativeMethods.GetWindowRect(hwnd, out var rect))
+            {
+                extraPhysical = Math.Max(0, rect.Height - baseHeightPhysical);
             }
             var placement = CodexQuotaMonitor.Wpf.MainWindow.ResolvePlacement(
                 settings.PlacementEdge,
                 settings.PlacementOffset,
                 settings.PlacementOffset2,
                 settings.WindowWidth,
-                baseHeight,
-                extra);
-            NativeMethods.SetTopmostPosition(hwnd, placement.X, placement.Y, placement.Width, placement.Height);
+                (int)Math.Round(baseHeightPhysical / scale),
+                (int)Math.Round(extraPhysical / scale),
+                scale);
+            NativeMethods.SetTopmostPosition(hwnd,
+                (int)Math.Round(placement.X * scale),
+                (int)Math.Round(placement.Y * scale),
+                (int)Math.Round(placement.Width * scale),
+                (int)Math.Round(placement.Height * scale));
             NativeMethods.SetTopmostNoActivate(hwnd);
             return true;
         }

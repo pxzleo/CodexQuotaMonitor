@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Microsoft.Win32;
 using CodexQuotaMonitor.Wpf;
 
 var tests = new (string Name, Action Body)[]
@@ -9,6 +10,7 @@ var tests = new (string Name, Action Body)[]
     ("formatting helpers", TestFormatting),
     ("taskbar overlay placement", TestTaskbarPlacement),
     ("quota history prune, save, load", TestQuotaHistory),
+    ("startup registration", TestStartupRegistration),
     ("argument handling", TestArguments)
 };
 
@@ -227,6 +229,29 @@ static void TestQuotaHistory()
     finally
     {
         Directory.Delete(tempDir, recursive: true);
+    }
+}
+
+static void TestStartupRegistration()
+{
+    var valueName = "CodexQuotaMonitorTest" + Guid.NewGuid().ToString("N");
+    var exe = Environment.ProcessPath;
+    try
+    {
+        Equal(StartupManager.BuildRunValue("C:\\App\\test.exe"), "\"C:\\App\\test.exe\"", "run value quoting");
+        Equal(false, StartupManager.IsEnabled(valueName), "initially not registered");
+
+        Equal(true, StartupManager.SetEnabled(true, valueName: valueName), "enable startup");
+        Equal(true, StartupManager.IsEnabled(valueName), "registered");
+        using var key = Registry.CurrentUser.OpenSubKey(StartupManager.RunKeyPath);
+        Equal(exe, ((string)key!.GetValue(valueName)!).Trim('"'), "run value points to process path");
+
+        Equal(true, StartupManager.SetEnabled(false, valueName: valueName), "disable startup");
+        Equal(false, StartupManager.IsEnabled(valueName), "unregistered");
+    }
+    finally
+    {
+        StartupManager.SetEnabled(false, valueName: valueName);
     }
 }
 

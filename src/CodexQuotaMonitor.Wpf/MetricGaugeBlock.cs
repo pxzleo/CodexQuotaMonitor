@@ -47,9 +47,17 @@ public sealed class MetricGaugeBlock : FrameworkElement
         var track = new SolidColorBrush(Formatting.ColorFromHex("#6A56616C"));
 
         var labelSize = Math.Clamp(height * 0.21, 7.0, 9.2);
-        var detailSize = Math.Clamp(height * 0.195, 6.8, 8.6);
         DrawText(dc, _title, 4, 1, labelSize, FontWeights.Bold, primary, dpi);
-        DrawText(dc, _detail, 4, height - detailSize - 2, detailSize, FontWeights.Normal, muted, dpi);
+
+        var titleLineHeight = MakeText(_title, labelSize, FontWeights.Bold, primary, dpi).Height;
+        var countdownSize = Math.Clamp((height - titleLineHeight - 3.0) / 2.64, 7.0, 12.0);
+        var y = 1.0 + titleLineHeight;
+        foreach (var part in _detail.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2))
+        {
+            var line = MakeText(part, countdownSize, FontWeights.Normal, muted, dpi);
+            dc.DrawText(line, new Point(4, y));
+            y += line.Height;
+        }
 
         var gaugeSize = Math.Clamp(height - 3, 22.0, 38.0);
         var gaugeX = width - gaugeSize - 2.0;

@@ -36,6 +36,7 @@
 - **Snap to taskbar left**：把窗口位置重置为任务栏左侧（默认位置）并立即贴靠。
 - **Quota interval**：将自动刷新间隔设置为 1、3、5、10 或 15 分钟。
 - **Trend window**：将曲线显示窗口设置为 24h、6h、1h 或 15min；选择会持久化并在下次启动时恢复。
+- **Run at startup**：勾选/取消当前用户的 Windows 开机自启动（写入 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`，值为当前可执行文件路径），默认不勾选，选择会保存到 `settings.json`。
 - **Exit**：退出窗口、托盘图标和后台进程。
 
 ![原生版右键菜单](assets/right-click-menu.png)
@@ -96,6 +97,7 @@
   "placement_edge": "taskbar",
   "placement_offset": 0,
   "placement_offset2": 0,
+  "startup": false,
   "red_threshold": 15.0,
   "amber_threshold": 30.0
 }

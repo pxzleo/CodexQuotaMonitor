@@ -26,6 +26,9 @@ public sealed class AppSettings
     [JsonPropertyName("placement_offset2")]
     public int PlacementOffset2 { get; set; }
 
+    [JsonPropertyName("startup")]
+    public bool Startup { get; set; }
+
     [JsonPropertyName("red_threshold")]
     public double RedThreshold { get; set; } = Constants.DefaultRedThreshold;
 
@@ -41,6 +44,7 @@ public sealed class AppSettings
         PlacementEdge = PlacementEdge,
         PlacementOffset = PlacementOffset,
         PlacementOffset2 = PlacementOffset2,
+        Startup = Startup,
         RedThreshold = RedThreshold,
         AmberThreshold = AmberThreshold
     };

@@ -6,6 +6,7 @@
   "placement_edge": "taskbar",
   "placement_offset": 0,
   "placement_offset2": 0,
+  "startup": false,
   "red_threshold": 15.0,
   "amber_threshold": 30.0
 }
